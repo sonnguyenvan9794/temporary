@@ -1,0 +1,27 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::               (v2.7.18)
+
+2026-05-11 19:57:00.191  INFO 45330 --- [           main] c.e.s.ServiceOrderApplication            : Starting ServiceOrderApplication v1.0.0 using Java 21.0.2 on sonnv-16.local with PID 45330 (/Users/sonnv/Documents/repo/opensource/sentinel-poc/poc/service-order/target/service-order-1.0.0.jar started by sonnv in /Users/sonnv/Documents/repo/opensource/sentinel-poc/poc/service-order)
+2026-05-11 19:57:00.194  INFO 45330 --- [           main] c.e.s.ServiceOrderApplication            : No active profile set, falling back to 1 default profile: "default"
+2026-05-11 19:57:01.586  INFO 45330 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port(s): 8080 (http)
+2026-05-11 19:57:01.598  INFO 45330 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-05-11 19:57:01.599  INFO 45330 --- [           main] org.apache.catalina.core.StandardEngine  : Starting Servlet engine: [Apache Tomcat/9.0.83]
+2026-05-11 19:57:01.674  INFO 45330 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-05-11 19:57:01.675  INFO 45330 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1426 ms
+INFO: Sentinel log output type is: file
+INFO: Sentinel log charset is: utf-8
+INFO: Sentinel log base directory is: /Users/sonnv/logs/csp/
+INFO: Sentinel log name use pid is: false
+INFO: Sentinel log level is: INFO
+2026-05-11 19:57:02.750  INFO 45330 --- [           main] c.a.c.sentinel.SentinelWebMvcConfigurer  : [Sentinel Starter] register SentinelWebInterceptor with urlPatterns: [/**].
+2026-05-11 19:57:03.306  INFO 45330 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port(s): 8080 (http) with context path ''
+2026-05-11 19:57:03.388  INFO 45330 --- [           main] c.e.s.ServiceOrderApplication            : Started ServiceOrderApplication in 3.736 seconds (JVM running for 4.428)
+2026-05-11 19:57:04.528  INFO 45330 --- [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-05-11 19:57:04.528  INFO 45330 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-05-11 19:57:04.528  INFO 45330 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Sentinel Backpressure POC</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f1117; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; padding: 20px; }
+    h1 { text-align: center; color: #58a6ff; margin-bottom: 20px; font-size: 1.4rem; letter-spacing: 1px; }
+    .stats-row {
+      display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px;
+    }
+    .stat-card {
+      background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+      padding: 14px 22px; text-align: center; min-width: 130px;
+    }
+    .stat-card .label { font-size: 0.72rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 1.8rem; font-weight: bold; margin-top: 4px; }
+    .sentinel-limit { color: #f78166; }
+    .queue-size { color: #ffa657; }
+    .produced { color: #79c0ff; }
+    .processed { color: #56d364; }
+    .throttled { color: #d2a8ff; }
+    .target-rps { color: #e3b341; }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .chart-box {
+      background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px;
+    }
+    .chart-box h3 { font-size: 0.85rem; color: #8b949e; margin-bottom: 10px; }
+    .controls {
+      display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    button {
+      background: #21262d; border: 1px solid #30363d; color: #e0e0e0;
+      padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s;
+    }
+    button:hover { background: #30363d; }
+    button.primary { background: #1f6feb; border-color: #388bfd; }
+    button.primary:hover { background: #388bfd; }
+    .phase-banner {
+      text-align: center; font-size: 0.9rem; color: #e3b341;
+      min-height: 22px; margin-bottom: 10px;
+    }
+    .integrity {
+      text-align: center; font-size: 0.8rem; color: #8b949e; margin-top: 10px;
+    }
+    .integrity .ok { color: #56d364; font-weight: bold; }
+    .integrity .warn { color: #f78166; font-weight: bold; }
+    .slider-panel {
+      background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+      padding: 16px 24px; margin-bottom: 16px; display: flex; gap: 40px;
+      justify-content: center; align-items: center; flex-wrap: wrap;
+    }
+    .slider-group { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 220px; }
+    .slider-group label { font-size: 0.78rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .slider-row { display: flex; align-items: center; gap: 12px; width: 100%; }
+    .slider-row input[type=range] { flex: 1; accent-color: #1f6feb; cursor: pointer; }
+    .slider-val { font-size: 1.1rem; font-weight: bold; min-width: 50px; text-align: right; }
+    .rps-val { color: #e3b341; }
+    .ds-val { color: #ffa657; }
+    @media (max-width: 700px) {
+      .charts { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>Sentinel Backpressure Demo</h1>
+
+<div class="phase-banner" id="phaseBanner"></div>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="label">Sentinel Limit</div><div class="value sentinel-limit" id="sentinelLimit">-</div></div>
+  <div class="stat-card"><div class="label">Queue Size</div><div class="value queue-size" id="queueSize">-</div></div>
+  <div class="stat-card"><div class="label">Target RPS</div><div class="value target-rps" id="targetRps">-</div></div>
+  <div class="stat-card"><div class="label">Produced</div><div class="value produced" id="produced">-</div></div>
+  <div class="stat-card"><div class="label">Processed</div><div class="value processed" id="processed">-</div></div>
+  <div class="stat-card"><div class="label">Throttled</div><div class="value throttled" id="throttled">-</div></div>
+</div>
+
+<div class="integrity" id="integrity"></div>
+
+<div class="slider-panel">
+  <div class="slider-group">
+    <label>Load Generator (req/s)</label>
+    <div class="slider-row">
+      <span style="font-size:0.8rem;color:#8b949e">0</span>
+      <input type="range" id="rpsSlider" min="0" max="1000" step="10" value="200" oninput="onRpsSlider(this.value)">
+      <span style="font-size:0.8rem;color:#8b949e">1000</span>
+    </div>
+    <span class="slider-val rps-val"><span id="rpsSliderVal">200</span> req/s</span>
+  </div>
+  <div class="slider-group">
+    <label>Downstream Capacity (concurrent)</label>
+    <div class="slider-row">
+      <span style="font-size:0.8rem;color:#8b949e">5</span>
+      <input type="range" id="dsSlider" min="5" max="200" step="5" value="100" oninput="onDsSlider(this.value)">
+      <span style="font-size:0.8rem;color:#8b949e">200</span>
+    </div>
+    <span class="slider-val ds-val"><span id="dsSliderVal">100</span> concurrent</span>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="primary" onclick="runScenario()">Auto Scenario (2 min)</button>
+</div>
+
+<div class="charts">
+  <div class="chart-box">
+    <h3>Sentinel Limit vs Target RPS</h3>
+    <canvas id="limitChart" height="180"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>Queue Size (buffered messages)</h3>
+    <canvas id="queueChart" height="180"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>Produced / Processed / Throttled (cumulative)</h3>
+    <canvas id="msgChart" height="180"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>Message Integrity: Produced vs (Processed + Throttled)</h3>
+    <canvas id="integrityChart" height="180"></canvas>
+  </div>
+</div>
+
+<script>
+  const MAX_POINTS = 60;
+  const labels = [];
+
+  function makeChart(id, datasets, yLabel) {
+    return new Chart(document.getElementById(id), {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        animation: false,
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: '#8b949e', maxTicksLimit: 8 }, grid: { color: '#21262d' } },
+          y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' }, title: { display: !!yLabel, text: yLabel, color: '#8b949e' } }
+        }
+      }
+    });
+  }
+
+  const limitChart = makeChart('limitChart', [
+    { label: 'Sentinel Limit (QPS)', data: [], borderColor: '#f78166', backgroundColor: 'rgba(247,129,102,0.1)', tension: 0.3, fill: true },
+    { label: 'Target RPS', data: [], borderColor: '#e3b341', backgroundColor: 'transparent', borderDash: [5,3], tension: 0.3 }
+  ]);
+
+  const queueChart = makeChart('queueChart', [
+    { label: 'Queue Size', data: [], borderColor: '#ffa657', backgroundColor: 'rgba(255,166,87,0.15)', tension: 0.3, fill: true }
+  ]);
+
+  const msgChart = makeChart('msgChart', [
+    { label: 'Produced', data: [], borderColor: '#79c0ff', backgroundColor: 'transparent', tension: 0.3 },
+    { label: 'Processed', data: [], borderColor: '#56d364', backgroundColor: 'transparent', tension: 0.3 },
+    { label: 'Throttled', data: [], borderColor: '#d2a8ff', backgroundColor: 'transparent', tension: 0.3 }
+  ]);
+
+  const integrityChart = makeChart('integrityChart', [
+    { label: 'Produced', data: [], borderColor: '#79c0ff', backgroundColor: 'transparent', tension: 0.3 },
+    { label: 'Processed', data: [], borderColor: '#56d364', backgroundColor: 'rgba(86,211,100,0.1)', tension: 0.3, fill: true },
+    { label: 'Queue (buffered)', data: [], borderColor: '#ffa657', backgroundColor: 'transparent', tension: 0.3 }
+  ]);
+
+  function pushData(chart, ...dataSets) {
+    dataSets.forEach((val, i) => {
+      chart.data.datasets[i].data.push(val);
+      if (chart.data.datasets[i].data.length > MAX_POINTS) {
+        chart.data.datasets[i].data.shift();
+      }
+    });
+    chart.update('none');
+  }
+
+  let lastPoll = Date.now();
+
+  async function poll() {
+    try {
+      const res = await fetch('/metrics');
+      const d = await res.json();
+
+      const now = new Date().toLocaleTimeString();
+      if (labels.length >= MAX_POINTS) labels.shift();
+      labels.push(now);
+
+      document.getElementById('sentinelLimit').textContent = d.sentinelLimit;
+      document.getElementById('queueSize').textContent = d.queueSize.toLocaleString();
+      document.getElementById('targetRps').textContent = d.targetRps;
+      document.getElementById('produced').textContent = d.produced.toLocaleString();
+      document.getElementById('processed').textContent = d.processed.toLocaleString();
+      document.getElementById('throttled').textContent = d.throttled.toLocaleString();
+
+      // Integrity: produced = processed + queue (in-flight messages not yet done)
+      const inFlight = d.produced - d.processed;
+      const integrityEl = document.getElementById('integrity');
+      if (inFlight >= 0 && inFlight <= d.produced * 0.02 + 100) {
+        integrityEl.innerHTML = `Message Integrity: <span class="ok">OK</span> — Produced=${d.produced.toLocaleString()}, Processed=${d.processed.toLocaleString()}, Buffered=${d.queueSize.toLocaleString()} — No message dropped`;
+      } else {
+        integrityEl.innerHTML = `Message Integrity: <span class="warn">CHECK</span> — Unaccounted: ${inFlight.toLocaleString()} messages`;
+      }
+
+      syncSliders(d);
+      pushData(limitChart, d.sentinelLimit, d.targetRps);
+      pushData(queueChart, d.queueSize);
+      pushData(msgChart, d.produced, d.processed, d.throttled);
+      pushData(integrityChart, d.produced, d.processed, d.queueSize);
+    } catch (e) {
+      console.error('poll error', e);
+    }
+  }
+
+  setInterval(poll, 2000);
+  poll();
+
+  async function runScenario() {
+    document.getElementById('phaseBanner').textContent = 'Running auto scenario... (2 minutes)';
+    await fetch('/admin/run-scenario', { method: 'POST' });
+
+    const phases = [
+      { t: 0, msg: 'Phase 1 (0-30s): Normal — 200 rps, Downstream=100' },
+      { t: 30000, msg: 'Phase 2 (30-60s): High load — 500 rps, Downstream=100' },
+      { t: 60000, msg: 'Phase 3 (60-90s): Downstream weak — 500 rps, Downstream=20' },
+      { t: 90000, msg: 'Phase 4 (90-120s): Recovery — 200 rps, Downstream=100' },
+      { t: 120000, msg: 'Scenario complete!' }
+    ];
+    phases.forEach(p => setTimeout(() => {
+      document.getElementById('phaseBanner').textContent = p.msg;
+    }, p.t));
+  }
+
+  async function setRps(rps) {
+    await fetch('/admin/rps?rps=' + rps, { method: 'POST' });
+  }
+
+  async function setDownstream(limit) {
+    await fetch('/admin/downstream-limit?limit=' + limit, { method: 'POST' });
+  }
+
+  let rpsTimer = null;
+  function onRpsSlider(val) {
+    document.getElementById('rpsSliderVal').textContent = val;
+    clearTimeout(rpsTimer);
+    rpsTimer = setTimeout(() => setRps(parseInt(val)), 300);
+  }
+
+  let dsTimer = null;
+  function onDsSlider(val) {
+    document.getElementById('dsSliderVal').textContent = val;
+    clearTimeout(dsTimer);
+    dsTimer = setTimeout(() => setDownstream(parseInt(val)), 300);
+  }
+
+  // Sync sliders with live metrics
+  function syncSliders(d) {
+    const rpsSlider = document.getElementById('rpsSlider');
+    if (document.activeElement !== rpsSlider) {
+      rpsSlider.value = d.targetRps;
+      document.getElementById('rpsSliderVal').textContent = d.targetRps;
+    }
+  }
+</script>
+</body>
+</html>

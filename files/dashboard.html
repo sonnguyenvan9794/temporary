@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>POC Dashboard — Backpressure Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 8px; color: #f1f5f9; font-size: 22px; }
+        .subtitle { text-align: center; color: #94a3b8; margin-bottom: 24px; font-size: 13px; }
+
+        .stats { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+        .stat { flex: 1; min-width: 140px; background: #1e293b; border-radius: 10px; padding: 16px;
+                border: 1px solid #334155; }
+        .stat .label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+        .stat.green  .value { color: #4ade80; }
+        .stat.red    .value { color: #f87171; }
+        .stat.blue   .value { color: #60a5fa; }
+        .stat.yellow .value { color: #fbbf24; }
+        .stat.purple .value { color: #c084fc; }
+
+        .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+        .chart-box { background: #1e293b; border-radius: 10px; padding: 16px; border: 1px solid #334155; }
+        .chart-box h3 { font-size: 13px; color: #94a3b8; margin-bottom: 12px; }
+
+        .controls { background: #1e293b; border-radius: 10px; padding: 16px; border: 1px solid #334155;
+                    display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+        .controls label { font-size: 13px; color: #94a3b8; }
+        input[type=range] { width: 160px; accent-color: #60a5fa; }
+        button { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;
+                 font-size: 13px; font-weight: 600; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-danger  { background: #dc2626; color: white; }
+        .btn-green   { background: #16a34a; color: white; }
+
+        .phase-indicator { background: #1e293b; border-radius: 10px; padding: 12px 16px;
+                           border: 1px solid #334155; font-size: 13px; color: #94a3b8; }
+        .phase-indicator span { color: #fbbf24; font-weight: 600; }
+
+        @media (max-width: 768px) { .charts { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <h1>🛡️ Backpressure POC Dashboard</h1>
+    <p class="subtitle">Chứng minh Sentinel + AIMD tự động bảo vệ Downstream khỏi bị dồn tải</p>
+
+    <!-- Stats realtime -->
+    <div class="stats">
+        <div class="stat blue">
+            <div class="label">Sentinel Limit (req/s)</div>
+            <div class="value" id="stat-limit">—</div>
+        </div>
+        <div class="stat yellow">
+            <div class="label">Queue Size (messages)</div>
+            <div class="value" id="stat-queue">—</div>
+        </div>
+        <div class="stat green">
+            <div class="label">Processed</div>
+            <div class="value" id="stat-processed">—</div>
+        </div>
+        <div class="stat red">
+            <div class="label">Throttled</div>
+            <div class="value" id="stat-throttled">—</div>
+        </div>
+        <div class="stat purple">
+            <div class="label">Load (req/s)</div>
+            <div class="value" id="stat-rps">—</div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <label>Load (RPS): <strong id="rps-display">200</strong></label>
+        <input type="range" id="rps-slider" min="0" max="1000" value="200" step="50"
+               oninput="document.getElementById('rps-display').textContent=this.value">
+        <button class="btn-primary" onclick="setRps()">Set RPS</button>
+
+        <label>Downstream Limit: <strong id="dl-display">100</strong></label>
+        <input type="range" id="dl-slider" min="5" max="200" value="100" step="5"
+               oninput="document.getElementById('dl-display').textContent=this.value">
+        <button class="btn-danger" onclick="setDownstreamLimit()">Set Limit</button>
+
+        <button class="btn-green" onclick="runScenario()">▶ Auto Scenario (2 min)</button>
+    </div>
+
+    <!-- Phase indicator -->
+    <div class="phase-indicator" id="phase-info">
+        📌 Sẵn sàng. Nhấn <strong>Auto Scenario</strong> để chạy kịch bản test tự động,
+        hoặc tự điều chỉnh RPS và Downstream Limit để quan sát hệ thống phản ứng.
+    </div>
+
+    <br>
+
+    <!-- Charts -->
+    <div class="charts">
+        <div class="chart-box">
+            <h3>📊 Sentinel Limit tự điều chỉnh (AIMD)</h3>
+            <canvas id="chart-limit"></canvas>
+        </div>
+        <div class="chart-box">
+            <h3>📨 Queue Size — Message giữ lại (không mất)</h3>
+            <canvas id="chart-queue"></canvas>
+        </div>
+        <div class="chart-box">
+            <h3>⚠️ Error Rate từ Downstream</h3>
+            <canvas id="chart-error"></canvas>
+        </div>
+        <div class="chart-box">
+            <h3>✅ Processed vs Throttled</h3>
+            <canvas id="chart-throughput"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const MAX_POINTS = 60;
+        const labels = [];
+        const limitData    = [];
+        const queueData    = [];
+        const errorData    = [];
+        const processedData= [];
+        const throttledData= [];
+
+        function makeChart(id, datasets, yLabel) {
+            return new Chart(document.getElementById(id), {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    animation: { duration: 300 },
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+                    scales: {
+                        x: { ticks: { color: '#64748b', maxTicksLimit: 8, font: { size: 10 } },
+                             grid: { color: '#1e293b' } },
+                        y: { ticks: { color: '#94a3b8', font: { size: 10 } },
+                             grid: { color: '#334155' },
+                             title: { display: !!yLabel, text: yLabel, color: '#64748b', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        const chartLimit = makeChart('chart-limit', [{
+            label: 'Sentinel Limit', data: limitData,
+            borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.1)',
+            fill: true, tension: 0.3, pointRadius: 2
+        }], 'req/s');
+
+        const chartQueue = makeChart('chart-queue', [{
+            label: 'Queue Size', data: queueData,
+            borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,0.1)',
+            fill: true, tension: 0.3, pointRadius: 2
+        }], 'messages');
+
+        const chartError = makeChart('chart-error', [{
+            label: 'Error Rate %', data: errorData,
+            borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)',
+            fill: true, tension: 0.3, pointRadius: 2
+        }], '%');
+
+        const chartThroughput = makeChart('chart-throughput', [
+            { label: 'Processed', data: processedData,
+              borderColor: '#4ade80', backgroundColor: 'rgba(74,222,128,0.1)',
+              fill: false, tension: 0.3, pointRadius: 2 },
+            { label: 'Throttled', data: throttledData,
+              borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)',
+              fill: false, tension: 0.3, pointRadius: 2 }
+        ]);
+
+        let lastProcessed = 0;
+        let lastThrottled = 0;
+
+        async function poll() {
+            try {
+                const res = await fetch('/metrics');
+                const data = await res.json();
+
+                // Update stats
+                document.getElementById('stat-limit').textContent     = data.sentinelLimit;
+                document.getElementById('stat-queue').textContent     = data.queueSize.toLocaleString();
+                document.getElementById('stat-processed').textContent = data.processed.toLocaleString();
+                document.getElementById('stat-throttled').textContent = data.throttled.toLocaleString();
+                document.getElementById('stat-rps').textContent       = data.targetRps;
+
+                // Tính delta (tốc độ thay đổi)
+                const procDelta  = data.processed - lastProcessed;
+                const throtDelta = data.throttled  - lastThrottled;
+                lastProcessed = data.processed;
+                lastThrottled = data.throttled;
+
+                // Lấy điểm history mới nhất để vẽ
+                const history = data.history || [];
+                if (history.length > 0) {
+                    const latest = history[history.length - 1];
+                    const t = new Date(latest.time).toLocaleTimeString('vi-VN');
+
+                    // Thêm điểm mới
+                    labels.push(t);
+                    limitData.push(latest.sentinelLimit);
+                    queueData.push(latest.queueSize);
+                    errorData.push(latest.errorRate);
+                    processedData.push(procDelta);
+                    throttledData.push(throtDelta);
+
+                    // Giữ MAX_POINTS
+                    if (labels.length > MAX_POINTS) {
+                        labels.shift(); limitData.shift(); queueData.shift();
+                        errorData.shift(); processedData.shift(); throttledData.shift();
+                    }
+
+                    chartLimit.update();
+                    chartQueue.update();
+                    chartError.update();
+                    chartThroughput.update();
+                }
+            } catch(e) {
+                console.error('Poll error:', e);
+            }
+        }
+
+        // Poll mỗi 2s
+        setInterval(poll, 2000);
+        poll();
+
+        // Controls
+        async function setRps() {
+            const rps = document.getElementById('rps-slider').value;
+            await fetch('/admin/rps?rps=' + rps, { method: 'POST' });
+            document.getElementById('phase-info').innerHTML =
+                '⚡ Load generator đang chạy <span>' + rps + ' req/s</span>';
+        }
+
+        async function setDownstreamLimit() {
+            const limit = document.getElementById('dl-slider').value;
+            await fetch('/admin/downstream-limit?limit=' + limit, { method: 'POST' });
+            document.getElementById('phase-info').innerHTML =
+                '⚠️ Downstream limit đặt về <span>' + limit + ' concurrent</span> — quan sát AIMD phản ứng';
+        }
+
+        async function runScenario() {
+            await fetch('/admin/run-scenario', { method: 'POST' });
+            document.getElementById('phase-info').innerHTML =
+                '🎬 Kịch bản tự động đang chạy: <span>Phase 1</span> → Phase 2 → Phase 3 → Phase 4 (mỗi phase 30s)';
+
+            // Cập nhật phase indicator theo thời gian
+            const phases = [
+                { t: 0,  text: '🟢 <span>Phase 1</span>: Bình thường — 200 req/s, downstream limit=100' },
+                { t: 30, text: '🟡 <span>Phase 2</span>: Spike — 500 req/s → Sentinel tự giảm limit' },
+                { t: 60, text: '🔴 <span>Phase 3</span>: Downstream yếu — limit=20 → Kafka buffer tăng' },
+                { t: 90, text: '🟢 <span>Phase 4</span>: Recovery — Downstream hồi phục → limit tăng dần' },
+            ];
+            phases.forEach(p => {
+                setTimeout(() => {
+                    document.getElementById('phase-info').innerHTML = p.text;
+                }, p.t * 1000);
+            });
+        }
+    </script>
+</body>
+</html>

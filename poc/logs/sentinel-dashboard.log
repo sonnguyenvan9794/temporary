@@ -1,0 +1,24 @@
+INFO: Sentinel log output type is: file
+INFO: Sentinel log charset is: utf-8
+INFO: Sentinel log base directory is: /Users/sonnv/logs/csp/
+INFO: Sentinel log name use pid is: false
+INFO: Sentinel log level is: INFO
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::               (v2.5.12)
+
+2026-05-11 19:56:52.756  INFO 45320 --- [           main] c.a.c.s.dashboard.DashboardApplication   : Starting DashboardApplication using Java 21.0.2 on sonnv-16.local with PID 45320 (/Users/sonnv/Documents/repo/opensource/sentinel-poc/poc/sentinel-dashboard.jar started by sonnv in /Users/sonnv/Documents/repo/opensource/sentinel-poc/poc/service-order)
+2026-05-11 19:56:52.761  INFO 45320 --- [           main] c.a.c.s.dashboard.DashboardApplication   : No active profile set, falling back to 1 default profile: "default"
+2026-05-11 19:56:54.691  INFO 45320 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port(s): 8858 (http)
+2026-05-11 19:56:54.709  INFO 45320 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-05-11 19:56:54.710  INFO 45320 --- [           main] org.apache.catalina.core.StandardEngine  : Starting Servlet engine: [Apache Tomcat/9.0.60]
+2026-05-11 19:56:54.834  INFO 45320 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-05-11 19:56:54.834  INFO 45320 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1973 ms
+2026-05-11 19:56:54.962  INFO 45320 --- [           main] c.a.c.s.dashboard.config.WebConfig       : Sentinel servlet CommonFilter registered
+2026-05-11 19:56:56.355  INFO 45320 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port(s): 8858 (http) with context path ''
+2026-05-11 19:56:56.366  INFO 45320 --- [           main] c.a.c.s.dashboard.DashboardApplication   : Started DashboardApplication in 4.441 seconds (JVM running for 5.383)

@@ -1,0 +1,29 @@
+version: '3.8'
+services:
+  downstream-fake:
+    build: ./downstream-fake
+    ports:
+      - "8081:8081"
+
+  mulesoft-fake:
+    build: ./mulesoft-fake
+    ports:
+      - "8082:8082"
+    environment:
+      - DOWNSTREAM_URL=http://downstream-fake:8081
+    depends_on:
+      - downstream-fake
+
+  service-order:
+    build: ./service-order
+    ports:
+      - "8080:8080"
+    environment:
+      - MULESOFT_URL=http://mulesoft-fake:8082
+    depends_on:
+      - mulesoft-fake
+
+  sentinel-dashboard:
+    image: bladex/sentinel-dashboard:1.8.6
+    ports:
+      - "8858:8858"
