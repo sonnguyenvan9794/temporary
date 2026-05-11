@@ -105,7 +105,7 @@ public class MuleSoftApplication {
     // → Token Server tự đẩy quota xuống service-order qua Netty
     // -------------------------------------------------------------------------
 
-    @Scheduled(initialDelay = 15000, fixedDelay = 5000)
+    @Scheduled(initialDelay = 30000, fixedDelay = 5000)
     public void aimdController() {
         long errors = windowErrors.getAndSet(0);
         long successes = windowSuccess.getAndSet(0);
@@ -116,8 +116,8 @@ public class MuleSoftApplication {
 
         double newLimit = currentLimit;
         if (errorRate > 0.30) {
-            // CRITICAL — giảm mạnh
-            newLimit = Math.max(10, currentLimit * 0.25);
+            // CRITICAL — giảm nhanh nhưng không sập hoàn toàn
+            newLimit = Math.max(10, currentLimit * 0.5);
         } else if (errorRate > 0.10) {
             // DEGRADED — giảm nhanh
             newLimit = Math.max(10, currentLimit * 0.5);
