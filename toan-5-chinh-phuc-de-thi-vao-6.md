@@ -1,5 +1,7 @@
 # Sách Chinh phục đề thi vào 6 môn Toán
 
+> Lịch học chi tiết 9/8→31/8: [toan-5-lich-hoc-9-31-8.md](./toan-5-lich-hoc-9-31-8.md)
+
 Nguồn: [Hocmai.vn](https://hocmai.vn) · Trang chủ > Toán > Sách Chinh phục đề thi vào 6 môn Toán
 
 | | |
