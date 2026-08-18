@@ -1,0 +1,22 @@
+name: Sync issue 1
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/issue-1-body.md"
+      - ".github/workflows/sync-issue-1.yml"
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update issue title and body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit 1 --repo sonnguyenvan9794/temporary \
+            --title "Toán 5 — mỗi ngày học gì (chưa đầy đủ)" \
+            --body-file .github/issue-1-body.md
